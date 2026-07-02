@@ -79,4 +79,4 @@ This repository contains the production-grade foundation for RaeburnAI Executive
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](LICENSE).
