@@ -1,0 +1,7 @@
+{
+  "organisation": "RaeburnAI Demo Company",
+  "executive_name": "CEO",
+  "timezone": "Europe/London",
+  "competitors": ["Example Competitor One", "Example Competitor Two"],
+  "focus_areas": ["cash", "sales", "delivery", "risk", "retention"]
+}
