@@ -1,4 +1,4 @@
-.PHONY: install dev api web test lint docker
+.PHONY: install dev api web test lint format typecheck build docker docker-build security
 
 install:
 	python -m pip install -e apps/api[dev]
@@ -18,7 +18,25 @@ test:
 
 lint:
 	cd apps/api && ruff check .
+	cd apps/web && npm run lint
+
+format:
+	cd apps/api && ruff format .
+
+typecheck:
+	cd apps/api && mypy raeburnai_executive
+	cd apps/web && npm run typecheck
+
+build:
+	cd apps/web && npm run build
 	docker compose config
+
+security:
+	cd apps/api && bandit -q -r raeburnai_executive
+
+docker-build:
+	docker build -f Dockerfile.api -t raeburnai-executive-api .
+	docker build -f Dockerfile.web -t raeburnai-executive-web .
 
 docker:
 	docker compose up --build
