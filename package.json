@@ -1,0 +1,14 @@
+{
+  "name": "raeburnai-executive",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "install:all": "python -m pip install -e apps/api[dev] && cd apps/web && npm install",
+    "lint": "cd apps/api && ruff check . && cd ../web && npm run lint",
+    "format": "cd apps/api && ruff format .",
+    "typecheck": "cd apps/api && mypy raeburnai_executive && cd ../web && npm run typecheck",
+    "test": "cd apps/api && pytest",
+    "build": "cd apps/web && npm run build",
+    "docker:build": "docker build -f Dockerfile.api -t raeburnai-executive-api . && docker build -f Dockerfile.web -t raeburnai-executive-web ."
+  }
+}
