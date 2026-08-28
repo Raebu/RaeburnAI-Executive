@@ -49,8 +49,13 @@ async def enforce_rate_limit(request: Request) -> None:
 
 def require_api_key(x_api_key: str | None = Header(default=None)) -> str:
     settings = get_settings()
-    if settings.env == "development" and settings.secret_key == "change-me":
+    if settings.env == "development" and settings.secret_key is None:
         return "development-user"
+    if settings.secret_key is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="API authentication is not configured",
+        )
     if not x_api_key or x_api_key != settings.secret_key:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
     return "api-user"
