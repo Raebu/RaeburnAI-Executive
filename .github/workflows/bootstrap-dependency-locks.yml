@@ -6,6 +6,8 @@ on:
       - feat/rai112-supply-chain-hardening
     paths:
       - '.github/workflows/bootstrap-dependency-locks.yml'
+      - 'apps/api/pyproject.toml'
+      - 'apps/web/package.json'
 
 permissions:
   contents: write
