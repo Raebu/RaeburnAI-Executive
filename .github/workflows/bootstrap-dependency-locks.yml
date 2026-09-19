@@ -37,7 +37,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install --disable-pip-version-check pip-tools==7.5.0 pip-audit==2.10.1
+          python -m pip install --disable-pip-version-check 'pip<26' pip-tools==7.5.0 pip-audit==2.10.1
           python -m piptools compile apps/api/pyproject.toml             --output-file apps/api/requirements.lock             --generate-hashes             --strip-extras
           python -m piptools compile apps/api/pyproject.toml             --extra dev             --output-file apps/api/requirements-dev.lock             --generate-hashes             --strip-extras
 
