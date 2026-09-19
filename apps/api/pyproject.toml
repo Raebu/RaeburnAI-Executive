@@ -8,7 +8,8 @@ version = "0.1.0"
 description = "Executive briefing and decision support API for RaeburnAI Executive"
 requires-python = ">=3.11"
 dependencies = [
-  "fastapi==0.115.14",
+  "fastapi==0.141.1",
+  "starlette==1.6.0",
   "uvicorn[standard]==0.30.6",
   "pydantic==2.8.2",
   "pydantic-settings==2.4.0",
