@@ -71,7 +71,7 @@ jobs:
           python -m venv /tmp/rai112-prod
           /tmp/rai112-prod/bin/python -m pip install --disable-pip-version-check --require-hashes -r apps/api/requirements.lock
           /tmp/rai112-prod/bin/python -m pip install --disable-pip-version-check pip-audit==2.10.1
-          /tmp/rai112-prod/bin/pip-audit --skip-editable
+          /tmp/rai112-prod/bin/pip-audit -r apps/api/requirements.lock
 
       - name: Fresh-install Python CI lock
         shell: bash
