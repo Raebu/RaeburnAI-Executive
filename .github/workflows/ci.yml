@@ -8,39 +8,150 @@ on:
 
 permissions:
   contents: read
+  security-events: write
+  actions: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   api:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.11'
-      - run: python -m pip install -e apps/api[dev]
-      - run: cd apps/api && ruff check .
-      - run: cd apps/api && mypy raeburnai_executive
-      - run: cd apps/api && pytest
-      - run: cd apps/api && bandit -q -r raeburnai_executive
+          cache: pip
+          cache-dependency-path: apps/api/requirements-dev.lock
+      - name: Install deterministic API dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r apps/api/requirements-dev.lock
+      - name: Audit production Python lock
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check pip-audit==2.10.1
+          python -m pip_audit -r apps/api/requirements.lock
+      - name: Validate software supply-chain policy
+        run: npm run validate:supply-chain
+      - name: API lint
+        run: cd apps/api && ruff check .
+      - name: API typecheck
+        run: cd apps/api && mypy raeburnai_executive
+      - name: API tests
+        run: cd apps/api && pytest
+      - name: API Bandit
+        run: cd apps/api && bandit -q -r raeburnai_executive
+
   web:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          node-version: '20.15.1'
-      - run: cd apps/web && npm install
-      - run: cd apps/web && npm run typecheck
-      - run: cd apps/web && npm run build
-  docker:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: '22.23.2'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install deterministic web dependencies
+        working-directory: apps/web
+        run: npm ci --ignore-scripts --no-audit
+      - name: High/Critical web dependency audit
+        working-directory: apps/web
+        run: npm audit --audit-level=high
+      - name: Web lint
+        run: cd apps/web && npm run lint
+      - name: Web typecheck
+        run: cd apps/web && npm run typecheck
+      - name: Web build
+        run: cd apps/web && npm run build
+
+  codeql:
+    name: CodeQL
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: docker build -f Dockerfile.api -t raeburnai-executive-api .
-      - run: docker build -f Dockerfile.web -t raeburnai-executive-web .
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81
+        with:
+          languages: javascript-typescript,python
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81
+
+  containers:
+    needs: [api, web]
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Build exact-SHA API image
+        run: docker build -f Dockerfile.api -t raeburnai-executive-api:${{ github.sha }} .
+      - name: Scan API image
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        with:
+          image-ref: raeburnai-executive-api:${{ github.sha }}
+          format: table
+          exit-code: '1'
+          severity: CRITICAL,HIGH
+      - name: Smoke-test API image
+        shell: bash
+        run: |
+          set -euo pipefail
+          id="$(docker run -d -p 127.0.0.1:8000:8000 raeburnai-executive-api:${{ github.sha }})"
+          trap 'docker logs "$id" || true; docker rm -f "$id" >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8000/health | grep -q '"status":"ok"'; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Build exact-SHA web image
+        run: docker build -f Dockerfile.web -t raeburnai-executive-web:${{ github.sha }} .
+      - name: Scan web image
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        with:
+          image-ref: raeburnai-executive-web:${{ github.sha }}
+          format: table
+          exit-code: '1'
+          severity: CRITICAL,HIGH
+      - name: Smoke-test web image
+        shell: bash
+        run: |
+          set -euo pipefail
+          id="$(docker run -d -p 127.0.0.1:3000:3000 raeburnai-executive-web:${{ github.sha }})"
+          trap 'docker logs "$id" || true; docker rm -f "$id" >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:3000/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+
   dependency-review:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294

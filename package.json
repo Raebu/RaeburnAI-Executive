@@ -9,6 +9,7 @@
     "typecheck": "cd apps/api && mypy raeburnai_executive && cd ../web && npm run typecheck",
     "test": "cd apps/api && pytest",
     "build": "cd apps/web && npm run build",
-    "docker:build": "docker build -f Dockerfile.api -t raeburnai-executive-api . && docker build -f Dockerfile.web -t raeburnai-executive-web ."
+    "docker:build": "docker build -f Dockerfile.api -t raeburnai-executive-api . && docker build -f Dockerfile.web -t raeburnai-executive-web .",
+    "validate:supply-chain": "node scripts/validate-supply-chain.mjs"
   }
 }
