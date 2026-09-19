@@ -1,12 +1,29 @@
-FROM python:3.11-slim@sha256:da047cb8f9d1d98e5c070f5300ba9f7274e33b8fc0e5be5ed88740aed1b95ba9
+FROM python:3.11-alpine3.24@sha256:0495f5559318affa673172ec7e35cd0a5213e4aaf4c76d0a66554c0af97b157e AS build
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 WORKDIR /app
-RUN addgroup --system app && adduser --system --ingroup app app
+RUN apk add --no-cache build-base
 COPY apps/api/requirements.lock ./requirements.lock
-RUN python -m pip install --disable-pip-version-check --no-cache-dir --require-hashes -r requirements.lock \
-    && rm -rf /usr/local/lib/python3.11/site-packages/pip* /usr/local/bin/pip*
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/python -m pip install --disable-pip-version-check --no-cache-dir --require-hashes -r requirements.lock \
+    && rm -rf /opt/venv/lib/python3.11/site-packages/pip* \
+        /opt/venv/lib/python3.11/site-packages/setuptools* \
+        /opt/venv/lib/python3.11/site-packages/wheel* \
+        /opt/venv/bin/pip*
+
+FROM python:3.11-alpine3.24@sha256:0495f5559318affa673172ec7e35cd0a5213e4aaf4c76d0a66554c0af97b157e AS runtime
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH=/opt/venv/bin:$PATH
+WORKDIR /app
+RUN rm -rf /usr/local/lib/python3.11/site-packages/pip* \
+        /usr/local/lib/python3.11/site-packages/setuptools* \
+        /usr/local/lib/python3.11/site-packages/wheel* \
+        /usr/local/bin/pip* \
+    && addgroup -S app \
+    && adduser -S -G app app
+COPY --from=build /opt/venv /opt/venv
 COPY apps/api/raeburnai_executive ./raeburnai_executive
 USER app
 EXPOSE 8000
